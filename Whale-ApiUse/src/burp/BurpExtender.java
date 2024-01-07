@@ -1,15 +1,19 @@
 package burp;
 
-import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.PrintWriter;
-import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Scanner;
+import javax.swing.*;
+import java.io.PrintWriter;
+import java.io.OutputStream;
+import java.io.BufferedReader;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.nio.charset.StandardCharsets;
+
 
 public class BurpExtender implements IBurpExtender, ITab {
     private IBurpExtenderCallbacks callbacks;
@@ -24,11 +28,12 @@ public class BurpExtender implements IBurpExtender, ITab {
         this.stdout.println("hello Whale-ApiUse!!!");
         this.stdout.println("version:1.0");
         callbacks.setExtensionName("Whale-ApiUse");
-        String[] Options = {"微信公众号", "微信小程序", "企业微信", "钉钉"};
+        String[] Options = {"微信公众号", "微信小程序", "企业微信", "钉钉", "飞书"};
+        String[] WxminiprogramOptions = {"查询域名配置", "获取性能数据", "获取访问来源", "获取客户端版本", "查询实时日志", "获取用户反馈列表", "获取 mediaId 图片", "查询js错误详情", "查询错误列表", "获取分阶段发布详情"};
         String[] WxOptions = {"获取微信服务器IP地址"};
-        String[] QyWxOptions = {"域名IP段", "获取部门列表", "获取部门成员列表", "获取部门成员详情"};
+        String[] QyWxOptions = {"域名IP段", "获取部门列表", "获取部门成员列表", "获取部门成员详情", "获取加入企业二维码", "创建成员"};
         String[] DDOptions = {"获取应用列表", "获取管理员信息", "新建账号", "删除账号", "获取角色列表", "获取账号信息"};
-        // Initialize the UI components
+        String[] FlyOptions = {"获取企业信息", "新建账号", "删除账号", "获取根部门列表", "获取账号信息", "获取部门用户列表"};
         SwingUtilities.invokeLater(() -> {
             mainPanel = new JPanel(new GridBagLayout());
             GridBagConstraints gbc = new GridBagConstraints();
@@ -64,11 +69,14 @@ public class BurpExtender implements IBurpExtender, ITab {
 
             gbc.gridx = 0;
             gbc.gridy = 6; // Next row
+            gbc.gridwidth = GridBagConstraints.REMAINDER; // Span the rest of the row
             gbc.weightx = 1.0;
             gbc.weighty = 1.0; // Take up the rest of the vertical space
-            gbc.gridwidth = GridBagConstraints.REMAINDER; // Span the rest of the row
             gbc.fill = GridBagConstraints.BOTH; // Fill both horizontally and vertically
             JTextArea textArea = new JTextArea();
+            textArea.setLineWrap(true); // 允许行包装
+            textArea.setWrapStyleWord(true); // 按单词包装
+            textArea.setEditable(false); // 设置为不可编辑
             textArea.setBorder(BorderFactory.createLineBorder(Color.BLACK));
             JScrollPane scrollPane = new JScrollPane(textArea);
             mainPanel.add(scrollPane, gbc);
@@ -87,6 +95,12 @@ public class BurpExtender implements IBurpExtender, ITab {
                                 GetAccessTokenUrlStr = "https://oapi.dingtalk.com/gettoken?appkey="+ AppId + "&appsecret=" + Secret;
                             }else  if ("企业微信".equals(selectApi)) {
                                 GetAccessTokenUrlStr = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid="+ AppId + "&corpsecret=" + Secret;
+                            }else  if ("飞书".equals(selectApi)) {
+                                String   jsonData = "{"
+                                        + "\"app_id\": \"" + AppId +"\","
+                                        + "\"app_secret\": " + Secret
+                                        + "}";
+                                return  executeHttpPost("https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid="+ AppId + "&corpsecret=" + Secret,jsonData);
                             }else {
                                 GetAccessTokenUrlStr = "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid="
                                         + AppId + "&secret=" + Secret;
@@ -126,37 +140,169 @@ public class BurpExtender implements IBurpExtender, ITab {
             AccessTokenUseButton.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
-                    String AccessToken = accessTokenLabel.getText().trim();
+                    String AccessToken = accessTokenField.getText().trim();
                     new SwingWorker<String, Void>() {
                         @Override
                         protected String doInBackground() throws Exception {
                             String selectApi = (String) comboBox.getSelectedItem();
                             String selectMethod = (String) use_comboBox.getSelectedItem();
-                            String urlStr = "";
+                            String jsonData = "";
                             if ("钉钉".equals(selectApi)) {
                                 if ("获取应用列表".equals(selectMethod)) {
-                                    urlStr = "" + AccessToken;
+                                    return executeHttpGet("https://oapi.dingtalk.com/chat/get?access_token=" + AccessToken);
+                                }
+                                else if("获取管理员信息".equals(selectMethod)) {
+                                    return executeHttpGet("https://oapi.dingtalk.com/topapi/user/listadmin?access_token=" + AccessToken);
+                                }
+                                else if("新建账号".equals(selectMethod)) {
+                                    if (ApiConfigPostField.getText().trim().isEmpty()) {
+                                        jsonData = "{"
+                                                + "\"userid\": \"999\","
+                                                + "\"name\": \"桀桀桀\","
+                                                + "\"mobile\": \"13999999999\","
+                                                + "\"title\": \"开发人员\","
+                                                + "\"hired_date\": \"1615219200000\","
+                                                + "\"work_place\": \"未来park\","
+                                                + "\"senior_mode\": \"false\","
+                                                + "\"dept_id_list\": \"486882112,609916111\""
+                                                + "}";
+                                    }
+                                    else {
+                                        jsonData=ApiConfigPostField.getText().trim();
+                                    }
+                                    return executeHttpPost("https://oapi.dingtalk.com/topapi/v2/user/create?access_token=" + AccessToken,jsonData);
+                                }
+                                else if("删除账号".equals(selectMethod)) {
+                                    return executeHttpGet("https://oapi.dingtalk.com/topapi/v2/user/delete?access_token=" + AccessToken + "&userid=999");
+                                }
+                                else if("获取角色列表".equals(selectMethod)) {
+                                    return executeHttpGet("https://oapi.dingtalk.com/topapi/role/list?access_token=" + AccessToken);
                                 }
                                 else{
-                                    urlStr = "" + AccessToken;
+                                    return executeHttpGet("https://oapi.dingtalk.com/topapi/v2/user/get?access_token=" + AccessToken + "&userid=999");
                                 }
-                            }else  if ("企业微信".equals(selectApi)) {
+                            }
+                            else  if ("飞书".equals(selectApi)) {
+                                return  executeHttpGet("https://open.feishu.cn/open-apis/contact/v3/users/find_by_department?department_id=");
+
+                            }
+                            else  if ("企业微信".equals(selectApi)) {
                                 if ("域名IP段".equals(selectMethod)) {
-                                    urlStr = "https://qyapi.weixin.qq.com/cgi-bin/get_api_domain_ip?access_token=" + AccessToken;
+                                    return executeHttpGet("https://qyapi.weixin.qq.com/cgi-bin/get_api_domain_ip?access_token=" + AccessToken);
                                 }
                                 else if("获取部门列表".equals(selectMethod)){
-                                    urlStr = "https://qyapi.weixin.qq.com/cgi-bin/department/list?access_token=" + AccessToken;
+                                    return executeHttpGet("https://qyapi.weixin.qq.com/cgi-bin/department/list?access_token=" + AccessToken);
                                 }
                                 else if("获取部门成员列表".equals(selectMethod)){
-                                    urlStr = "https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=" + AccessToken;
+                                    return executeHttpGet("https://qyapi.weixin.qq.com/cgi-bin/user/simplelist?access_token=" + AccessToken);
+                                }
+                                else if("获取加入企业二维码".equals(selectMethod)){
+                                    return executeHttpGet("https://qyapi.weixin.qq.com/cgi-bin/corp/get_join_qrcode?access_token=" + AccessToken);
+                                }
+                                else if("创建成员".equals(selectMethod)){
+                                    if (ApiConfigPostField.getText().trim().isEmpty()) {
+                                        jsonData = "{"
+                                                + "\"userid\": \"test999\","
+                                                + "\"name\": \"桀桀桀\","
+                                                + "\"department\": [1],"
+                                                + "\"mobile\": \"13999999999\""
+                                                + "}";
+                                    }
+                                    else {
+                                        jsonData=ApiConfigPostField.getText().trim();
+                                    }
+                                    return executeHttpPost("https://qyapi.weixin.qq.com/cgi-bin/user/create?access_token=" + AccessToken,jsonData);
                                 }
                                 else{
-                                    urlStr = "https://qyapi.weixin.qq.com/cgi-bin/user/list?access_token=" + AccessToken;
+                                    return executeHttpGet("https://qyapi.weixin.qq.com/cgi-bin/user/list?access_token=" + AccessToken);
                                 }
-                            }else {
-                                urlStr = "https://api.weixin.qq.com/cgi-bin/get_api_domain_ip?access_token=" + AccessToken;
                             }
-                            return executeHttpGet(urlStr);
+                            else if ("微信小程序".equals(selectApi)) {
+                                if ("查询域名配置".equals(selectMethod)) {
+                                    return executeHttpGet("https://api.weixin.qq.com/wxa/getwxadevinfo?access_token=" + AccessToken);
+                                }
+                                else if("获取性能数据".equals(selectMethod)){
+                                    // 默认为官方数据
+                                    if (ApiConfigPostField.getText().trim().isEmpty()) {
+                                        jsonData = "{"
+                                                + "\"cost_time_type\": 2,"
+                                                + "\"default_start_time\": 1572339403,"
+                                                + "\"default_end_time\": 1574931403,"
+                                                + "\"device\": \"@_all\","
+                                                + "\"networktype\": \"@_all\","
+                                                + "\"scene\": \"@_all\","
+                                                + "\"is_download_code\": \"@_all\""
+                                                + "}";
+                                    }
+                                    else {
+                                        jsonData=ApiConfigPostField.getText().trim();
+                                    }
+                                    return executeHttpPost("https://api.weixin.qq.com/wxaapi/log/get_performance?access_token=" + AccessToken,jsonData);
+                                }
+                                else if("获取访问来源".equals(selectMethod)){
+                                    return executeHttpGet("https://api.weixin.qq.com/wxaapi/log/get_scene?access_token=" + AccessToken);
+                                }
+                                else if("获取客户端版本".equals(selectMethod)){
+                                    return executeHttpGet("https://api.weixin.qq.com/wxaapi/log/get_client_version?access_token=" + AccessToken);
+                                }
+                                else if("查询实时日志".equals(selectMethod)){
+                                    return executeHttpGet("https://api.weixin.qq.com/wxaapi/userlog/userlog_search?access_token=" + AccessToken+"&date=20240101&begintime=20240101&endtime=20240115");
+                                }
+                                else if("获取用户反馈列表".equals(selectMethod)){
+                                    return executeHttpGet("https://api.weixin.qq.com/wxaapi/feedback/list?access_token=" + AccessToken + "&page=1&num=10");
+                                }
+                                else if("获取 mediaId 图片".equals(selectMethod)){
+                                    return executeHttpGet("https://api.weixin.qq.com/wxaapi/media/getfeedbackmedia?access_token=" + AccessToken + "&record_id=1&media_id=1");
+                                }
+                                else if("查询js错误详情".equals(selectMethod)){
+                                    if (ApiConfigPostField.getText().trim().isEmpty()) {
+                                        jsonData = "{"
+                                            + "\"startTime\":  \"2024-01-01\","
+                                            + "\"endTime\":  \"2024-01-15\","
+                                            + "\"errorMsgMd5\":  \"f2fb4f8cd638466ad0e7607b01b7d0ca\","
+                                            + "\"errorStackMd5\": \"795a63b70ce5755c7103611d93077603\","
+                                            + "\"appVersion\": \"0\","
+                                            + "\"sdkVersion\": \"0\","
+                                            + "\"osName\": \"2\","
+                                            + "\"clientVersion\": \"0\","
+                                            + "\"openid\": \"\","
+                                            + "\"offset\": 0,"
+                                            + "\"limit\": 10,"
+                                            + "\"desc\": \"0\","
+                                            + "}";
+                                    }
+                                    else {
+                                        jsonData=ApiConfigPostField.getText().trim();
+                                    }
+                                    return  executeHttpPost("https://api.weixin.qq.com/wxaapi/log/jserr_detail?access_token=" + AccessToken,jsonData);
+                                }
+                                else if("查询错误列表".equals(selectMethod)){
+                                    if (ApiConfigPostField.getText().trim().isEmpty()) {
+                                        jsonData = "{"
+                                            + "\"startTime\":  \"2024-01-01\","
+                                            + "\"endTime\":  \"2024-01-15\","
+                                            + "\"errType\":  \"0\","
+                                            + "\"appVersion\": \"0\","
+                                            + "\"openid\": \"\","
+                                            + "\"keyword\": \"\","
+                                            + "\"orderby\": \"uv\","
+                                            + "\"desc\": \"2\","
+                                            + "\"offset\": 0,"
+                                            + "\"limit\": 1"
+                                            + "}";
+                                    }
+                                    else {
+                                        jsonData=ApiConfigPostField.getText().trim();
+                                    }
+                                    return  executeHttpPost("https://api.weixin.qq.com/wxaapi/log/jserr_list?access_token=" + AccessToken,jsonData);
+                                }
+                                else{
+                                    return  executeHttpGet("https://api.weixin.qq.com/wxa/getgrayreleaseplan?access_token=" + AccessToken + "&record_id=1&media_id=1");
+                                }
+                            }
+                            else {
+                                return executeHttpGet("https://api.weixin.qq.com/wxa/getgrayreleaseplan?access_token=" + AccessToken);
+                            }
                         }
                         @Override
                         protected void done() {
@@ -179,7 +325,13 @@ public class BurpExtender implements IBurpExtender, ITab {
                     if ("钉钉".equals(selected)) {
                         wxAppIdLabel.setText("Appkey:");
                         wxSecretLabel.setText("AppSecret:");
-                        for (String item : QyWxOptions) {
+                        for (String item : DDOptions) {
+                            use_comboBox.addItem(item);
+                        }
+                    } else if ("飞书".equals(selected)) {
+                        wxAppIdLabel.setText("app_id:");
+                        wxSecretLabel.setText("app_secret:");
+                        for (String item : FlyOptions) {
                             use_comboBox.addItem(item);
                         }
                     } else if ("企业微信".equals(selected)) {
@@ -188,11 +340,17 @@ public class BurpExtender implements IBurpExtender, ITab {
                         for (String item : QyWxOptions) {
                             use_comboBox.addItem(item);
                         }
-                    } else{
+                    }else{
                         wxAppIdLabel.setText("WxAppId:");
                         wxSecretLabel.setText("WxSecret:");
-                        for (String item : WxOptions) {
-                            use_comboBox.addItem(item);
+                        if ("微信小程序".equals(selected)) {
+                            for (String item : WxminiprogramOptions) {
+                                use_comboBox.addItem(item);
+                            }
+                        }else {
+                            for (String item : WxOptions) {
+                                use_comboBox.addItem(item);
+                            }
                         }
                     }
                     wxAppIdField.setText(""); // 清空或设置为WxAppId的默认值
@@ -244,24 +402,57 @@ public class BurpExtender implements IBurpExtender, ITab {
         return comboBox;
     }
     private String executeHttpGet(String urlString) {
-        String response = "Error";
+        StringBuilder responseBuilder = new StringBuilder();
         try {
             URL url = new URL(urlString);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.connect();
-
             // Check if the request was successful
             if (conn.getResponseCode() == HttpURLConnection.HTTP_OK) {
-                Scanner scanner = new Scanner(url.openStream());
-                response = scanner.useDelimiter("\\Z").next();
-                scanner.close();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                    String responseLine;
+                    while ((responseLine = br.readLine()) != null) {
+                        responseBuilder.append(responseLine.trim());
+                    }
+                }
+            } else {
+                // Handle HTTP error codes
+                responseBuilder.append("{\"error\":\"HTTP error code: ").append(conn.getResponseCode()).append("\"}");
             }
         } catch (Exception ex) {
             stdout.println("An error occurred: " + ex.getMessage());
+            return "{\"error\":\"" + ex.getMessage().replaceAll("\"", "\\\"") + "\"}";
         }
-        return response;
+        return responseBuilder.toString();
     }
+    private String executeHttpPost(String urlString, String jsonData) {
+        StringBuilder responseBuilder = new StringBuilder();
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                byte[] input = jsonData.getBytes(StandardCharsets.UTF_8);
+                os.write(input, 0, input.length);
+            }
+
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String responseLine;
+                while ((responseLine = br.readLine()) != null) {
+                    responseBuilder.append(responseLine.trim());
+                }
+            }
+        } catch (Exception ex) {
+            // 在这里处理异常
+            return "{\"error\":\"" + ex.getMessage() + "\"}";
+        }
+        return responseBuilder.toString();
+    }
+
     @Override
     public String getTabCaption() {
         return "Whale-ApiUse";

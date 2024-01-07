@@ -6,8 +6,6 @@ Whale-ApiUse是burp插件，可以用来测试wx公众号，微信小程序，�
 
 ## 使用说明
 
-目前钉钉的功能还不能使用，后续会补充上去。
-
 使用，选择相对应的应用，然后输出key和secret，点击获取accesstoken。
 
 ![image-20240106212632494](img/README/image-20240106212632494.png)
@@ -18,7 +16,23 @@ Whale-ApiUse是burp插件，可以用来测试wx公众号，微信小程序，�
 
 然后获取到的accesstoken可以直接选择后续的模块进行利用，本插件是直接获取输出框的值然后进行访问的。
 
+小程序调用的官方网址：https://developers.weixin.qq.com/miniprogram/dev/OpenApiDoc/operation/getDomainInfo.html
 
+微信小程序目前提供的接口仅用于验证，剩下的操作可以查看上述网址进行操作
+
+企业微信官方网址：https://developer.work.weixin.qq.com/resource/devtool
+
+钉钉官方网址：https://open.dingtalk.com/document/orgapp/api-overview
+
+案例链接：
+
+https://xz.aliyun.com/t/11092#toc-0
+
+## 版本更新
+
+### 1.1
+
+1.1版本首先完善了1.0未完成的操作，然后补充了飞书，钉钉进去，还补充了发包的操作。
 
 ## 后续开发
 
